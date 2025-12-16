@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-# test_now.py - FORCE RUN TEST IMMEDIATELY
+# test_now.py - FIXED VERSION with async support
 
 import os
 import sys
+import asyncio
 import time
 from datetime import datetime
-from telegram import Bot
 
 # Add current directory to path
 sys.path.append('.')
@@ -31,23 +31,30 @@ if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
     print("Please set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID")
     sys.exit(1)
 
-def send_telegram(message):
-    """Send message to Telegram"""
+# Import telegram AFTER checking credentials
+from telegram import Bot
+
+async def send_telegram_async(message):
+    """Send message to Telegram (async version)"""
     try:
         bot = Bot(token=TELEGRAM_BOT_TOKEN)
-        bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message, parse_mode='HTML')
+        await bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message, parse_mode='HTML')
         print("✅ Telegram message sent!")
         return True
     except Exception as e:
         print(f"❌ Telegram error: {e}")
         return False
 
-def test_telegram_connection():
-    """Test Telegram connection"""
+def send_telegram_sync(message):
+    """Send message to Telegram (sync wrapper)"""
+    return asyncio.run(send_telegram_async(message))
+
+async def test_telegram_connection():
+    """Test Telegram connection (async)"""
     print("\n🔗 Testing Telegram connection...")
     try:
         bot = Bot(token=TELEGRAM_BOT_TOKEN)
-        bot_info = bot.get_me()
+        bot_info = await bot.get_me()
         print(f"✅ Bot connected: @{bot_info.username}")
         return True
     except Exception as e:
@@ -55,7 +62,7 @@ def test_telegram_connection():
         return False
 
 def run_quick_analysis():
-    """Run quick analysis on 5 stocks"""
+    """Run quick analysis on 5 stocks (synchronous)"""
     print("\n📊 Running quick analysis...")
     
     # Use only 3 stocks for speed
@@ -68,7 +75,7 @@ def run_quick_analysis():
     
     for symbol in test_stocks:
         stock_name = symbol.replace('.NS', '')
-        print(f"  → {stock_name}: ", end="")
+        print(f"  → {stock_name}: ", end="", flush=True)
         
         try:
             # Try each analysis
@@ -106,6 +113,9 @@ def run_quick_analysis():
         except Exception as e:
             print(f"Error: {str(e)[:50]}")
             continue
+        
+        # Small delay
+        time.sleep(0.5)
     
     return results
 
@@ -152,29 +162,44 @@ def create_message(results):
     
     return message
 
-def main():
-    """Main function"""
+async def async_main():
+    """Main async function"""
     print("=" * 60)
     print("🚀 NSE STOCK ANALYSIS - FORCE TEST RUN")
     print("=" * 60)
     
     # Test Telegram connection first
-    if not test_telegram_connection():
+    if not await test_telegram_connection():
+        # Try to send error message anyway
+        try:
+            bot = Bot(token=TELEGRAM_BOT_TOKEN)
+            await bot.send_message(
+                chat_id=TELEGRAM_CHAT_ID,
+                text="❌ <b>TEST ERROR</b>\n\nCould not connect to Telegram bot. Please check credentials.",
+                parse_mode='HTML'
+            )
+        except:
+            pass
         return
     
     # Send initial test message
-    send_telegram("🤖 <b>TEST STARTED</b>\nBeginning analysis now...")
+    await send_telegram_async("🤖 <b>TEST STARTED</b>\nBeginning analysis now...")
     
-    # Run analysis
+    # Run analysis (synchronous, so run in thread)
+    print("\n📊 Starting stock analysis...")
     results = run_quick_analysis()
     
     # Create and send results
     message = create_message(results)
-    send_telegram(message)
+    await send_telegram_async(message)
     
     print("\n" + "=" * 60)
     print("✅ TEST COMPLETE! Check Telegram for results.")
     print("=" * 60)
+
+def main():
+    """Main synchronous wrapper"""
+    asyncio.run(async_main())
 
 if __name__ == "__main__":
     main()
