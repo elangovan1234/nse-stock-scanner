@@ -30,112 +30,92 @@ async def send_telegram_message(message):
         return False
 
 def format_results(smc_results, bajaj_results, rsi_results, engulfing_results, total_stocks):
-    """Format all analysis results into ONE comprehensive message"""
-    current_time = datetime.now(pytz.timezone('Asia/Kolkata')).strftime('%Y-%m-%d %H:%M:%S')
+    """Format all analysis results into ONE comprehensive message with requested formatting"""
+    # Time in 12-hour AM/PM format
+    current_time = datetime.now(pytz.timezone('Asia/Kolkata')).strftime('%Y-%m-%d %I:%M %p')
     
     message = f"<b>📊 NSE STOCK ANALYSIS - {current_time}</b>\n"
     message += "═" * 50 + "\n\n"
     
-    # 1. SMC DAILY ANALYSIS
+    # 1. SMC DAILY ANALYSIS - Changed to "1D-LONG"
     if smc_results:
-        message += "<b>🎯 SMC DAILY (35% Discount + Swing Low):</b>\n"
-        for stock in smc_results[:10]:  # Show top 10
+        message += "<b>🎯 1D-LONG (35% Discount + Swing Low):</b>\n"
+        for stock in smc_results[:15]:  # Increased to 15
             signals = []
             if stock['order_block'] == 'Y': signals.append('OB')
             if stock['fvg'] == 'Y': signals.append('FVG')
             if stock['volume_spike'] == 'Y': signals.append('VOLx2')
             
             message += f"• {stock['symbol']}: {stock['confluence_score']}/3 → {', '.join(signals)}\n"
-        if len(smc_results) > 10:
-            message += f"... and {len(smc_results) - 10} more\n"
-        message += f"<i>Total qualified: {len(smc_results)}</i>\n\n"
+        if len(smc_results) > 15:
+            message += f"... and {len(smc_results) - 15} more\n"
+        message += f"<i>Total: {len(smc_results)}</i>\n\n"
     
-    # 2. BAJAJ HOURLY ANALYSIS
+    # 2. BAJAJ HOURLY ANALYSIS - Changed to "1HR-LONG"
     if bajaj_results:
-        message += "<b>⏰ BAJAJ-STYLE HOURLY (15% Discount):</b>\n"
-        for stock in bajaj_results[:10]:  # Show top 10
+        message += "<b>⏰ 1HR-LONG (15% Discount):</b>\n"
+        for stock in bajaj_results[:15]:  # Increased to 15
             message += f"• {stock['symbol']}: OB={stock['ob']}, Score={stock['confluence_score']}\n"
-        if len(bajaj_results) > 10:
-            message += f"... and {len(bajaj_results) - 10} more\n"
-        message += f"<i>Total qualified: {len(bajaj_results)}</i>\n\n"
+        if len(bajaj_results) > 15:
+            message += f"... and {len(bajaj_results) - 15} more\n"
+        message += f"<i>Total: {len(bajaj_results)}</i>\n\n"
     
-    # 3. RSI MULTI-TIMEFRAME
+    # 3. RSI MULTI-TIMEFRAME - Simplified formatting
     if rsi_results:
         oversold = [r for r in rsi_results if 'OVERSOLD' in r.get('confluence', '')]
         overbought = [r for r in rsi_results if 'OVERBOUGHT' in r.get('confluence', '')]
         
         if oversold:
-            message += "<b>🟢 TRIPLE OVERSOLD (1D+4H+1H):</b>\n"
-            for stock in oversold[:5]:
-                message += f"• {stock['symbol']}: 1D={stock['1D_RSI']} {stock['1D_SIGNAL']}, "
-                message += f"4H={stock['4H_RSI']} {stock['4H_SIGNAL']}, "
-                message += f"1H={stock['1H_RSI']} {stock['1H_SIGNAL']}\n"
+            message += "<b>🟢 TRIPLE OVERSOLD:</b>\n"
+            for stock in oversold[:10]:  # Show more stocks
+                # Format: symbol: 1D_RSI-4H_RSI-1H_RSI (no color balls, just numbers)
+                rsi_values = f"{stock['1D_RSI']:.0f}-{stock['4H_RSI']:.0f}-{stock['1H_RSI']:.0f}"
+                message += f"• {stock['symbol']}: {rsi_values}\n"
+            if len(oversold) > 10:
+                message += f"... and {len(oversold) - 10} more\n"
         
         if overbought:
-            message += "<b>🔴 TRIPLE OVERBOUGHT (1D+4H+1H):</b>\n"
-            for stock in overbought[:5]:
-                message += f"• {stock['symbol']}: 1D={stock['1D_RSI']} {stock['1D_SIGNAL']}, "
-                message += f"4H={stock['4H_RSI']} {stock['4H_SIGNAL']}, "
-                message += f"1H={stock['1H_RSI']} {stock['1H_SIGNAL']}\n"
+            message += "<b>🔴 TRIPLE OVERBOUGHT:</b>\n"
+            for stock in overbought[:10]:  # Show more stocks
+                # Format: symbol: 1D_RSI-4H_RSI-1H_RSI (no color balls, just numbers)
+                rsi_values = f"{stock['1D_RSI']:.0f}-{stock['4H_RSI']:.0f}-{stock['1H_RSI']:.0f}"
+                message += f"• {stock['symbol']}: {rsi_values}\n"
+            if len(overbought) > 10:
+                message += f"... and {len(overbought) - 10} more\n"
         
         message += f"<i>Total triple alignments: {len(rsi_results)}</i>\n\n"
     
-    # 4. 4H ENGULFING
+    # 4. 4H ENGULFING - Simplified formatting
     if engulfing_results:
         bullish = [r for r in engulfing_results if r['pattern'] == 'BULLISH']
         bearish = [r for r in engulfing_results if r['pattern'] == 'BEARISH']
         
         if bullish:
             message += "<b>📈 4H BULLISH ENGULFING:</b>\n"
-            for stock in bullish[:5]:
-                change_emoji = "🟢" if stock['change_pct'] > 0 else "🔴"
-                message += f"• {stock['symbol']}: ₹{stock['price']} ({change_emoji}{abs(stock['change_pct']):.2f}%)\n"
+            for stock in bullish[:10]:  # Show more stocks, no price/percentage
+                message += f"• {stock['symbol']}\n"
+            if len(bullish) > 10:
+                message += f"... and {len(bullish) - 10} more\n"
         
         if bearish:
             message += "<b>📉 4H BEARISH ENGULFING:</b>\n"
-            for stock in bearish[:5]:
-                change_emoji = "🔴" if stock['change_pct'] < 0 else "🟢"
-                message += f"• {stock['symbol']}: ₹{stock['price']} ({change_emoji}{abs(stock['change_pct']):.2f}%)\n"
+            for stock in bearish[:10]:  # Show more stocks, no price/percentage
+                message += f"• {stock['symbol']}\n"
+            if len(bearish) > 10:
+                message += f"... and {len(bearish) - 10} more\n"
         
         message += f"<i>Total engulfing patterns: {len(engulfing_results)}</i>\n\n"
     
-    # 5. TOP PICKS (Combined Signals)
-    all_signals = {}
-    for stock in smc_results + bajaj_results + rsi_results + engulfing_results:
-        symbol = stock['symbol']
-        if symbol not in all_signals:
-            all_signals[symbol] = {'signals': [], 'count': 0}
-        
-        if 'symbol' in stock:
-            all_signals[symbol]['count'] += 1
-            if stock in smc_results and stock['confluence_score'] >= 2:
-                all_signals[symbol]['signals'].append('SMC⭐')
-            elif stock in bajaj_results and stock['ob'] == 'Y':
-                all_signals[symbol]['signals'].append('Bajaj⭐')
-            elif stock in rsi_results:
-                all_signals[symbol]['signals'].append('RSI⭐')
-            elif stock in engulfing_results:
-                all_signals[symbol]['signals'].append('Engulf⭐')
-    
-    strong_picks = {k: v for k, v in all_signals.items() if v['count'] >= 2}
-    if strong_picks:
-        message += "<b>🎯 STRONG PICKS (Multiple Signals):</b>\n"
-        for symbol, data in list(strong_picks.items())[:10]:
-            message += f"• {symbol}: {', '.join(data['signals'])}\n"
-        message += "\n"
-    
-    # 6. SUMMARY
-    message += "<b>📋 EXECUTIVE SUMMARY:</b>\n"
-    message += f"• Total stocks analyzed: {total_stocks}\n"
-    message += f"• SMC Daily signals: {len(smc_results)}\n"
-    message += f"• Bajaj Hourly signals: {len(bajaj_results)}\n"
-    message += f"• RSI Triple signals: {len(rsi_results)}\n"
-    message += f"• 4H Engulfing signals: {len(engulfing_results)}\n"
-    message += f"• Strong multi-signal picks: {len(strong_picks)}\n"
-    message += f"• Analysis time: {datetime.now().strftime('%H:%M')}\n"
+    # 5. SIMPLE SUMMARY ONLY (removed executive summary and strong picks)
+    message += "<b>📋 SUMMARY:</b>\n"
+    message += f"• Total stocks: {total_stocks}\n"
+    message += f"• 1D-LONG: {len(smc_results)}\n"
+    message += f"• 1HR-LONG: {len(bajaj_results)}\n"
+    message += f"• RSI Triple: {len(rsi_results)}\n"
+    message += f"• 4H Engulfing: {len(engulfing_results)}\n"
     
     if not any([smc_results, bajaj_results, rsi_results, engulfing_results]):
-        message += "\n<i>⚠️ No strong signals found. Market may be closed or in consolidation.</i>"
+        message += "\n<i>⚠️ No signals found</i>"
     
     return message
 
