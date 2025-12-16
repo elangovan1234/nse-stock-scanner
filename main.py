@@ -19,22 +19,18 @@ TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 # Import telegram
 from telegram import Bot
 
-# ⚠️ FORCE ANALYSIS MODE
-FORCE_ANALYSIS = True  # Set to True to always run analysis
-
 async def send_telegram_message(message):
-    """Send message to Telegram (async)"""
+    """Send message to Telegram (async) - ONE MESSAGE ONLY"""
     try:
         bot = Bot(token=TELEGRAM_BOT_TOKEN)
         await bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message, parse_mode='HTML')
-        print("✅ Message sent to Telegram")
         return True
     except Exception as e:
-        print(f"❌ Error sending Telegram message: {e}")
+        print(f"❌ Telegram error: {e}")
         return False
 
-def format_results(smc_results, bajaj_results, rsi_results, engulfing_results, analyzed_count):
-    """Format all analysis results into a single message"""
+def format_results(smc_results, bajaj_results, rsi_results, engulfing_results, total_stocks):
+    """Format all analysis results into ONE comprehensive message"""
     current_time = datetime.now(pytz.timezone('Asia/Kolkata')).strftime('%Y-%m-%d %H:%M:%S')
     
     message = f"<b>📊 NSE STOCK ANALYSIS - {current_time}</b>\n"
@@ -43,25 +39,25 @@ def format_results(smc_results, bajaj_results, rsi_results, engulfing_results, a
     # 1. SMC DAILY ANALYSIS
     if smc_results:
         message += "<b>🎯 SMC DAILY (35% Discount + Swing Low):</b>\n"
-        for stock in smc_results[:10]:  # Top 10
+        for stock in smc_results[:10]:  # Show top 10
             signals = []
             if stock['order_block'] == 'Y': signals.append('OB')
             if stock['fvg'] == 'Y': signals.append('FVG')
             if stock['volume_spike'] == 'Y': signals.append('VOLx2')
             
             message += f"• {stock['symbol']}: {stock['confluence_score']}/3 → {', '.join(signals)}\n"
-        message += f"Total qualified: {len(smc_results)}\n\n"
-    else:
-        message += "<b>❌ SMC DAILY:</b> No signals found\n\n"
+        if len(smc_results) > 10:
+            message += f"... and {len(smc_results) - 10} more\n"
+        message += f"<i>Total qualified: {len(smc_results)}</i>\n\n"
     
     # 2. BAJAJ HOURLY ANALYSIS
     if bajaj_results:
         message += "<b>⏰ BAJAJ-STYLE HOURLY (15% Discount):</b>\n"
-        for stock in bajaj_results[:10]:  # Top 10
+        for stock in bajaj_results[:10]:  # Show top 10
             message += f"• {stock['symbol']}: OB={stock['ob']}, Score={stock['confluence_score']}\n"
-        message += f"Total qualified: {len(bajaj_results)}\n\n"
-    else:
-        message += "<b>❌ BAJAJ HOURLY:</b> No signals found\n\n"
+        if len(bajaj_results) > 10:
+            message += f"... and {len(bajaj_results) - 10} more\n"
+        message += f"<i>Total qualified: {len(bajaj_results)}</i>\n\n"
     
     # 3. RSI MULTI-TIMEFRAME
     if rsi_results:
@@ -71,16 +67,18 @@ def format_results(smc_results, bajaj_results, rsi_results, engulfing_results, a
         if oversold:
             message += "<b>🟢 TRIPLE OVERSOLD (1D+4H+1H):</b>\n"
             for stock in oversold[:5]:
-                message += f"• {stock['symbol']}: 1D={stock['1D_RSI']}, 4H={stock['4H_RSI']}, 1H={stock['1H_RSI']}\n"
+                message += f"• {stock['symbol']}: 1D={stock['1D_RSI']} {stock['1D_SIGNAL']}, "
+                message += f"4H={stock['4H_RSI']} {stock['4H_SIGNAL']}, "
+                message += f"1H={stock['1H_RSI']} {stock['1H_SIGNAL']}\n"
         
         if overbought:
             message += "<b>🔴 TRIPLE OVERBOUGHT (1D+4H+1H):</b>\n"
             for stock in overbought[:5]:
-                message += f"• {stock['symbol']}: 1D={stock['1D_RSI']}, 4H={stock['4H_RSI']}, 1H={stock['1H_RSI']}\n"
+                message += f"• {stock['symbol']}: 1D={stock['1D_RSI']} {stock['1D_SIGNAL']}, "
+                message += f"4H={stock['4H_RSI']} {stock['4H_SIGNAL']}, "
+                message += f"1H={stock['1H_RSI']} {stock['1H_SIGNAL']}\n"
         
-        message += f"Total triple alignments: {len(rsi_results)}\n\n"
-    else:
-        message += "<b>❌ RSI MTF:</b> No triple alignments found\n\n"
+        message += f"<i>Total triple alignments: {len(rsi_results)}</i>\n\n"
     
     # 4. 4H ENGULFING
     if engulfing_results:
@@ -90,146 +88,121 @@ def format_results(smc_results, bajaj_results, rsi_results, engulfing_results, a
         if bullish:
             message += "<b>📈 4H BULLISH ENGULFING:</b>\n"
             for stock in bullish[:5]:
-                message += f"• {stock['symbol']}: ₹{stock['price']} ({stock['change_pct']:+.2f}%)\n"
+                change_emoji = "🟢" if stock['change_pct'] > 0 else "🔴"
+                message += f"• {stock['symbol']}: ₹{stock['price']} ({change_emoji}{abs(stock['change_pct']):.2f}%)\n"
         
         if bearish:
             message += "<b>📉 4H BEARISH ENGULFING:</b>\n"
             for stock in bearish[:5]:
-                message += f"• {stock['symbol']}: ₹{stock['price']} ({stock['change_pct']:+.2f}%)\n"
+                change_emoji = "🔴" if stock['change_pct'] < 0 else "🟢"
+                message += f"• {stock['symbol']}: ₹{stock['price']} ({change_emoji}{abs(stock['change_pct']):.2f}%)\n"
         
-        message += f"Total engulfing patterns: {len(engulfing_results)}\n\n"
-    else:
-        message += "<b>❌ 4H ENGULFING:</b> No patterns found\n\n"
+        message += f"<i>Total engulfing patterns: {len(engulfing_results)}</i>\n\n"
     
-    # SUMMARY
-    message += "<b>📊 ANALYSIS SUMMARY:</b>\n"
-    message += f"• Total stocks analyzed: {analyzed_count}\n"
+    # 5. TOP PICKS (Combined Signals)
+    all_signals = {}
+    for stock in smc_results + bajaj_results + rsi_results + engulfing_results:
+        symbol = stock['symbol']
+        if symbol not in all_signals:
+            all_signals[symbol] = {'signals': [], 'count': 0}
+        
+        if 'symbol' in stock:
+            all_signals[symbol]['count'] += 1
+            if stock in smc_results and stock['confluence_score'] >= 2:
+                all_signals[symbol]['signals'].append('SMC⭐')
+            elif stock in bajaj_results and stock['ob'] == 'Y':
+                all_signals[symbol]['signals'].append('Bajaj⭐')
+            elif stock in rsi_results:
+                all_signals[symbol]['signals'].append('RSI⭐')
+            elif stock in engulfing_results:
+                all_signals[symbol]['signals'].append('Engulf⭐')
+    
+    strong_picks = {k: v for k, v in all_signals.items() if v['count'] >= 2}
+    if strong_picks:
+        message += "<b>🎯 STRONG PICKS (Multiple Signals):</b>\n"
+        for symbol, data in list(strong_picks.items())[:10]:
+            message += f"• {symbol}: {', '.join(data['signals'])}\n"
+        message += "\n"
+    
+    # 6. SUMMARY
+    message += "<b>📋 EXECUTIVE SUMMARY:</b>\n"
+    message += f"• Total stocks analyzed: {total_stocks}\n"
     message += f"• SMC Daily signals: {len(smc_results)}\n"
     message += f"• Bajaj Hourly signals: {len(bajaj_results)}\n"
     message += f"• RSI Triple signals: {len(rsi_results)}\n"
     message += f"• 4H Engulfing signals: {len(engulfing_results)}\n"
-    message += f"• Total time: {datetime.now().strftime('%H:%M:%S')}\n"
+    message += f"• Strong multi-signal picks: {len(strong_picks)}\n"
+    message += f"• Analysis time: {datetime.now().strftime('%H:%M')}\n"
+    
+    if not any([smc_results, bajaj_results, rsi_results, engulfing_results]):
+        message += "\n<i>⚠️ No strong signals found. Market may be closed or in consolidation.</i>"
     
     return message
 
-async def run_full_analysis():
-    """Run full analysis on ALL stocks"""
-    print(f"🚀 Starting FULL analysis at {datetime.now()}")
-    print(f"📊 Analyzing ALL {len(STOCKS_LIST)} stocks...")
+async def analyze_all_stocks():
+    """Analyze ALL 209 stocks silently"""
+    print(f"🔍 Analyzing ALL {len(STOCKS_LIST)} stocks...")
     
-    # Run all analyses
     smc_results = []
     bajaj_results = []
     rsi_results = []
     engulfing_results = []
     
-    analyzed_count = 0
+    analyzed = 0
     errors = 0
     
-    # Send progress update
-    await send_telegram_message(f"🔍 <b>ANALYSIS STARTED</b>\n\nAnalyzing {len(STOCKS_LIST)} stocks...")
-    
     for i, symbol in enumerate(STOCKS_LIST, 1):
-        stock_name = symbol.replace('.NS', '')
-        
-        if i % 20 == 0:  # Progress every 20 stocks
-            print(f"   [{i:3d}/{len(STOCKS_LIST)}] {stock_name}")
-            # Send progress update every 50 stocks
-            if i % 50 == 0:
-                progress_msg = f"📈 <b>Progress:</b> {i}/{len(STOCKS_LIST)} stocks analyzed\n"
-                progress_msg += f"✅ SMC: {len(smc_results)}, Bajaj: {len(bajaj_results)}\n"
-                progress_msg += f"✅ RSI: {len(rsi_results)}, Engulfing: {len(engulfing_results)}"
-                await send_telegram_message(progress_msg)
+        if i % 20 == 0:
+            print(f"   [{i:3d}/{len(STOCKS_LIST)}] stocks analyzed")
         
         try:
-            # Run SMC Daily
-            smc_result = analyze_smc_daily(symbol)
-            if smc_result:
-                smc_results.append(smc_result)
+            # Run all analyses
+            smc = analyze_smc_daily(symbol)
+            if smc:
+                smc_results.append(smc)
             
-            # Run Bajaj Hourly
-            bajaj_result = analyze_bajaj_hourly(symbol)
-            if bajaj_result:
-                bajaj_results.append(bajaj_result)
+            bajaj = analyze_bajaj_hourly(symbol)
+            if bajaj:
+                bajaj_results.append(bajaj)
             
-            # Run RSI MTF
-            rsi_result = analyze_rsi_mtf(symbol)
-            if rsi_result:
-                rsi_results.append(rsi_result)
+            rsi = analyze_rsi_mtf(symbol)
+            if rsi:
+                rsi_results.append(rsi)
             
-            # Run 4H Engulfing
-            engulfing_result = analyze_engulfing_4h(symbol)
-            if engulfing_result:
-                engulfing_results.append(engulfing_result)
+            engulf = analyze_engulfing_4h(symbol)
+            if engulf:
+                engulfing_results.append(engulf)
             
-            analyzed_count += 1
-            
-            # Rate limiting
-            time.sleep(0.3)  # Reduced delay for faster analysis
+            analyzed += 1
+            time.sleep(0.25)  # Rate limiting
             
         except Exception as e:
             errors += 1
-            if errors <= 5:  # Log first 5 errors only
-                print(f"      Error analyzing {stock_name}: {e}")
             continue
     
-    print(f"\n✅ Analysis completed!")
-    print(f"   Stocks analyzed: {analyzed_count}")
-    print(f"   Errors: {errors}")
-    print(f"   SMC Daily: {len(smc_results)} signals")
-    print(f"   Bajaj Hourly: {len(bajaj_results)} signals")
-    print(f"   RSI MTF: {len(rsi_results)} signals")
-    print(f"   4H Engulfing: {len(engulfing_results)} signals")
+    print(f"✅ Analysis complete! Analyzed: {analyzed}, Errors: {errors}")
+    return smc_results, bajaj_results, rsi_results, engulfing_results
+
+async def main():
+    """Main function - ONE MESSAGE ONLY"""
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        print("❌ Telegram credentials missing!")
+        return
     
-    # Format and send results
-    message = format_results(smc_results, bajaj_results, rsi_results, engulfing_results, analyzed_count)
+    print("🚀 Starting NSE Stock Analysis...")
+    print(f"📊 Total stocks: {len(STOCKS_LIST)}")
     
+    # Analyze all stocks
+    results = await analyze_all_stocks()
+    
+    # Create ONE comprehensive message
+    message = format_results(*results, len(STOCKS_LIST))
+    
+    # Send ONE message only
     if await send_telegram_message(message):
         print("✅ Telegram message sent successfully!")
     else:
         print("❌ Failed to send Telegram message")
-    
-    return smc_results, bajaj_results, rsi_results, engulfing_results
-
-async def main():
-    """Main async function"""
-    # Validate Telegram credentials
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        print("❌ ERROR: Telegram credentials not set!")
-        print("Please set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID as environment variables")
-        return
-    
-    print("=" * 60)
-    print("🚀 NSE STOCK ANALYSIS - FULL SCAN")
-    print("=" * 60)
-    print(f"📊 Total stocks: {len(STOCKS_LIST)}")
-    print(f"⚙️  FORCE_ANALYSIS: {FORCE_ANALYSIS}")
-    print("=" * 60)
-    
-    # Send startup message
-    startup_msg = f"🤖 <b>NSE ANALYSIS BOT STARTED</b>\n\n"
-    startup_msg += f"📊 Analyzing: {len(STOCKS_LIST)} stocks\n"
-    startup_msg += f"🕒 Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-    startup_msg += "═" * 30 + "\n\n"
-    startup_msg += "<b>ANALYSIS MODULES:</b>\n"
-    startup_msg += "• SMC Daily (35% discount + swing low)\n"
-    startup_msg += "• Bajaj Hourly (15% discount)\n"
-    startup_msg += "• RSI Multi-Timeframe\n"
-    startup_msg += "• 4H Engulfing Patterns\n\n"
-    startup_msg += "<i>Analysis in progress...</i>"
-    
-    await send_telegram_message(startup_msg)
-    
-    # Run analysis
-    results = await run_full_analysis()
-    
-    # Send completion message
-    completion_msg = f"✅ <b>ANALYSIS COMPLETED</b>\n\n"
-    completion_msg += f"📊 Total stocks analyzed: {len(STOCKS_LIST)}\n"
-    completion_msg += f"🕒 Finished: {datetime.now().strftime('%H:%M:%S')}\n\n"
-    completion_msg += "<i>Check above for detailed results.</i>"
-    
-    await send_telegram_message(completion_msg)
 
 if __name__ == "__main__":
     asyncio.run(main())
