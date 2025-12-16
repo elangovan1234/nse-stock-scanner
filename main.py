@@ -1,9 +1,9 @@
 import os
+import asyncio
 import time
 from datetime import datetime, timedelta
 import pandas_market_calendars as mcal
 import pytz
-from telegram import Bot
 
 # Import analysis modules
 from stocks_list import STOCKS_LIST
@@ -16,8 +16,11 @@ from analysis_engulfing_4h import analyze_engulfing_4h
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
+# Import telegram
+from telegram import Bot
+
 # ⚠️ TEST MODE - DISABLE MARKET CHECK
-TEST_MODE = True  # Set to False for production
+TEST_MODE = True  # Set to False after testing
 
 def is_market_open():
     """Check if NSE is open today - DISABLED IN TEST MODE"""
@@ -41,11 +44,11 @@ def is_market_open():
     except:
         return False
 
-def send_telegram_message(message):
-    """Send message to Telegram"""
+async def send_telegram_message(message):
+    """Send message to Telegram (async)"""
     try:
         bot = Bot(token=TELEGRAM_BOT_TOKEN)
-        bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message, parse_mode='HTML')
+        await bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message, parse_mode='HTML')
         print("✅ Message sent to Telegram")
         return True
     except Exception as e:
@@ -124,7 +127,7 @@ def format_results(smc_results, bajaj_results, rsi_results, engulfing_results):
     
     # SUMMARY
     message += "<b>📊 TEST SUMMARY:</b>\n"
-    message += f"• Total stocks analyzed: {len(STOCKS_LIST)}\n"
+    message += f"• Total stocks analyzed: {len(STOCKS_LIST[:10])}\n"
     message += f"• SMC Daily signals: {len(smc_results) if smc_results else 0}\n"
     message += f"• Bajaj Hourly signals: {len(bajaj_results) if bajaj_results else 0}\n"
     message += f"• RSI Triple signals: {len(rsi_results) if rsi_results else 0}\n"
@@ -134,23 +137,24 @@ def format_results(smc_results, bajaj_results, rsi_results, engulfing_results):
     
     return message
 
-def run_analysis():
-    """Run all analyses"""
+def run_analysis_sync():
+    """Run all analyses (synchronous)"""
     print(f"🧪 TEST MODE: Starting analysis at {datetime.now()}")
     
-    if not is_market_open():
-        print("⚠️ Market is closed but running in TEST MODE")
+    if not is_market_open() and not TEST_MODE:
+        print("⏸️ Market is closed. Skipping analysis.")
+        return
     
-    print(f"📊 Analyzing {len(STOCKS_LIST)} stocks...")
+    # Analyze only 10 stocks for quick testing
+    test_stocks = STOCKS_LIST[:10]
+    
+    print(f"📊 Analyzing {len(test_stocks)} stocks...")
     
     # Run all analyses
     smc_results = []
     bajaj_results = []
     rsi_results = []
     engulfing_results = []
-    
-    # Analyze only 10 stocks for quick testing
-    test_stocks = STOCKS_LIST[:10]  # Only first 10 for quick test
     
     for i, symbol in enumerate(test_stocks, 1):
         print(f"   [{i:3d}/{len(test_stocks)}] {symbol.replace('.NS', '')}")
@@ -189,24 +193,30 @@ def run_analysis():
     print(f"   RSI MTF: {len(rsi_results)} signals")
     print(f"   4H Engulfing: {len(engulfing_results)} signals")
     
-    # Format and send results
-    message = format_results(smc_results, bajaj_results, rsi_results, engulfing_results)
+    return smc_results, bajaj_results, rsi_results, engulfing_results
+
+async def run_analysis():
+    """Main async function to run analysis"""
+    # Validate Telegram credentials
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        print("❌ ERROR: Telegram credentials not set!")
+        print("Please set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID as environment variables")
+        return
     
-    if send_telegram_message(message):
+    print("🧪 STARTING TEST RUN...")
+    print(f"📊 Stocks to analyze: {len(STOCKS_LIST[:10])}")
+    print(f"⚙️  TEST_MODE: {TEST_MODE}")
+    
+    # Run analysis
+    results = run_analysis_sync()
+    
+    # Format and send results
+    message = format_results(*results)
+    
+    if await send_telegram_message(message):
         print("✅ Telegram message sent successfully!")
     else:
         print("❌ Failed to send Telegram message")
 
 if __name__ == "__main__":
-    # Validate Telegram credentials
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        print("❌ ERROR: Telegram credentials not set!")
-        print("Please set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID as environment variables")
-        exit(1)
-    
-    print("🧪 STARTING TEST RUN...")
-    print(f"📊 Stocks to analyze: {len(STOCKS_LIST)}")
-    print(f"⚙️  TEST_MODE: {TEST_MODE}")
-    
-    # Run analysis
-    run_analysis()
+    asyncio.run(run_analysis())
